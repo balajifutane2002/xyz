@@ -1,32 +1,41 @@
 # ---------- Stage 1: Build the JAR using Maven ----------
-FROM maven:3.9.6-eclipse-temurin-21 AS build
+# Uses Maven + JDK 21 to build your Spring Boot app
+FROM maven:3.9.9-eclipse-temurin-21 AS build
 
-# Create a folder inside the container
+# Set working directory inside the container
 WORKDIR /app
 
-# Copy pom.xml first (for dependency cache)
+# Copy only pom.xml first (better dependency caching)
 COPY pom.xml .
 
-# Copy source code
+# (Optional but useful) Download dependencies in advance
+RUN mvn -B dependency:go-offline
+
+# Now copy the actual source code
 COPY src ./src
 
-# Build the project (skip tests to avoid your test failures)
-RUN mvn clean package -DskipTests
+# Build the project and skip tests (since your tests are failing)
+RUN mvn -B clean package -DskipTests
 
-# ---------- Stage 2: Run the built JAR ----------
+
+# ---------- Stage 2: Run the built JAR with a smaller JRE ----------
 FROM eclipse-temurin:21-jre
 
-# Create a folder for running the app
+# Working directory for the runtime container
 WORKDIR /app
 
-# Copy the JAR from the build stage
+# Copy the built JAR from the build stage
 COPY --from=build /app/target/*.jar app.jar
 
-# Expose port (for local understanding; cloud may override)
-EXPOSE 8080
-
-# If platform sets PORT (like Render), Spring will use it
+# Default port (Spring will use PORT env if set)
 ENV PORT=8080
 
-# Command to run the app
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Expose port 8080 (for local usage / docs)
+EXPOSE 8080
+
+# Optional: extra JVM options can be passed via JAVA_OPTS env var
+ENV JAVA_OPTS=""
+
+# Start the Spring Boot app
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
